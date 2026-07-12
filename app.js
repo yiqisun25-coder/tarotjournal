@@ -76,6 +76,22 @@ function cardMeta(name) {
   return { symbol: "🔮", className: "suit-unknown", corner: "" };
 }
 
+// 韦特 1909 原版牌图（公有领域，来自 Wikimedia Commons），网站静态素材
+const RANK_FILE_NUM = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10, "侍从": 11, "骑士": 12, "王后": 13, "国王": 14 };
+const SUIT_FILE = { "权杖": "wands", "圣杯": "cups", "宝剑": "swords", "星币": "pents" };
+
+function cardImagePath(name) {
+  const clean = String(name || "").trim();
+  for (const [suit, file] of Object.entries(SUIT_FILE)) {
+    if (clean.startsWith(suit)) {
+      const num = RANK_FILE_NUM[clean.slice(suit.length)];
+      return num ? `cards/${file}-${String(num).padStart(2, "0")}.jpg` : null;
+    }
+  }
+  const majorIndex = MAJOR_ARCANA.indexOf(MAJOR_ALIASES[clean] || clean);
+  return majorIndex >= 0 ? `cards/major-${String(majorIndex).padStart(2, "0")}.jpg` : null;
+}
+
 function cardFaceHtml(card) {
   const meta = cardMeta(card.name);
   const reversed = card.orientation === "逆位";
@@ -290,9 +306,12 @@ function renderDaily() {
     (record.cards || []).some((card) => (card.name || "").trim() === name)
   ).length;
 
+  const imagePath = cardImagePath(name);
   els.dailyProgress.textContent = `第 ${index + 1} / ${total} 张`;
   els.dailyBody.innerHTML = `
-    ${cardFaceHtml({ name, orientation: "正位" })}
+    ${imagePath
+      ? `<img class="daily-card-img" src="${imagePath}" alt="${escapeHtml(name)}牌面">`
+      : cardFaceHtml({ name, orientation: "正位" })}
     <div class="daily-info">
       <h3>
         ${escapeHtml(name)}

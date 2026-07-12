@@ -288,6 +288,15 @@ textarea:focus {
   align-items: flex-start;
 }
 
+.daily-card-img {
+  flex: 0 0 156px;
+  width: 156px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(50, 38, 27, 0.18);
+  display: block;
+}
+
 .daily-info {
   min-width: 0;
   display: grid;
@@ -817,6 +826,11 @@ form {
 
   .daily-body {
     gap: 14px;
+  }
+
+  .daily-card-img {
+    flex-basis: 118px;
+    width: 118px;
   }
 
   .daily-nav {
