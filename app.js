@@ -17,6 +17,8 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 
 const els = {
+  dailyBody: $("#dailyBody"),
+  dailyProgress: $("#dailyProgress"),
   recordList: $("#recordList"),
   detailPanel: $("#detailPanel"),
   searchInput: $("#searchInput"),
@@ -244,8 +246,48 @@ function updateSyncState() {
 function render() {
   updateSyncState();
   renderStats();
+  renderDaily();
   renderList();
   renderDetail();
+}
+
+// 用日期决定今天学哪张牌：每台设备算出来都一样，不需要同步
+const DAILY_EPOCH = Date.UTC(2026, 6, 12);
+let dailyOffset = 0;
+
+function dailyIndexToday() {
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((todayUtc - DAILY_EPOCH) / 86400000);
+  return ((days % ALL_CARDS.length) + ALL_CARDS.length) % ALL_CARDS.length;
+}
+
+function renderDaily() {
+  if (!els.dailyBody) return;
+  const total = ALL_CARDS.length;
+  const index = (((dailyIndexToday() + dailyOffset) % total) + total) % total;
+  const name = ALL_CARDS[index];
+  const meaning = TAROT_MEANINGS[name] || { keywords: "", upright: "", reversed: "", question: "" };
+  const drawnCount = activeRecords().filter((record) =>
+    (record.cards || []).some((card) => (card.name || "").trim() === name)
+  ).length;
+
+  els.dailyProgress.textContent = `第 ${index + 1} / ${total} 张`;
+  els.dailyBody.innerHTML = `
+    ${cardFaceHtml({ name, orientation: "正位" })}
+    <div class="daily-info">
+      <h3>
+        ${escapeHtml(name)}
+        ${dailyOffset === 0 ? `<span class="tag">今日</span>` : ""}
+        <span class="daily-count">${drawnCount ? `我抽到过 ${drawnCount} 次` : "还没抽到过"}</span>
+      </h3>
+      <p><strong>关键词：</strong>${escapeHtml(meaning.keywords)}</p>
+      <p><strong>正位：</strong>${escapeHtml(meaning.upright)}</p>
+      <p><strong>逆位：</strong>${escapeHtml(meaning.reversed)}</p>
+      <p class="daily-question">✍️ ${escapeHtml(meaning.question)}</p>
+      ${drawnCount ? `<button class="ghost" type="button" data-daily-search="${escapeHtml(name)}">查看我抽到这张牌的记录</button>` : ""}
+    </div>
+  `;
 }
 
 function renderStats() {
@@ -778,6 +820,17 @@ function bindEvents() {
   });
   $("#exportBtn").addEventListener("click", exportData);
   $("#importInput").addEventListener("change", (event) => importData(event.target.files[0]));
+
+  $("#prevCardBtn").addEventListener("click", () => { dailyOffset -= 1; renderDaily(); });
+  $("#nextCardBtn").addEventListener("click", () => { dailyOffset += 1; renderDaily(); });
+  $("#todayCardBtn").addEventListener("click", () => { dailyOffset = 0; renderDaily(); });
+  els.dailyBody.addEventListener("click", (event) => {
+    const name = event.target.dataset.dailySearch;
+    if (!name) return;
+    els.searchInput.value = name;
+    render();
+    els.recordList.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 async function withCloud(fn) {

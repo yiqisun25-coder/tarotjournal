@@ -291,6 +291,70 @@ textarea:focus {
   margin-top: 4px;
 }
 
+.daily-panel {
+  background: rgba(255, 250, 246, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(50, 38, 27, 0.08);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.daily-body {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.daily-info {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.daily-info h3 {
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.daily-count {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.daily-info p {
+  line-height: 1.7;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.daily-question {
+  border-left: 3px solid var(--gold);
+  padding: 6px 0 6px 12px;
+  color: var(--accent-dark);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.daily-info .ghost {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.daily-nav {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.daily-nav button {
+  flex: 1;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(290px, 410px) minmax(0, 1fr);
@@ -785,5 +849,13 @@ form {
   .detail-actions button,
   .dialog-actions button {
     flex: 1;
+  }
+
+  .daily-body {
+    gap: 14px;
+  }
+
+  .daily-nav {
+    flex-direction: column;
   }
 }
