@@ -5,7 +5,8 @@ const JSONBIN_URL = "https://api.jsonbin.io/v3/b";
 const state = {
   records: [],
   selectedId: null,
-  config: { apiKey: "", binId: "" }
+  config: { apiKey: "", binId: "" },
+  syncing: false
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -72,6 +73,16 @@ function saveLocal(message) {
   if (message) showToast(message);
 }
 
+function hasCloudConfig() {
+  return Boolean(state.config.apiKey && state.config.binId);
+}
+
+async function saveAndSync(localMessage = "已保存到本地") {
+  saveLocal(localMessage);
+  if (!hasCloudConfig()) return;
+  await autoSyncToCloud();
+}
+
 function saveConfig() {
   state.config.apiKey = els.apiKeyInput.value.trim();
   state.config.binId = els.binIdInput.value.trim();
@@ -126,8 +137,10 @@ function filteredRecords() {
 }
 
 function updateSyncState() {
-  if (state.config.apiKey && state.config.binId) {
-    els.syncState.textContent = "已配置";
+  if (state.syncing) {
+    els.syncState.textContent = "同步中";
+  } else if (hasCloudConfig()) {
+    els.syncState.textContent = "自动同步";
     els.syncSetup.hidden = true;
     els.syncSummary.hidden = false;
   } else if (state.config.apiKey) {
@@ -400,18 +413,18 @@ async function saveRecordFromForm() {
   state.records.unshift(record);
   state.selectedId = id;
   els.recordDialog.close();
-  saveLocal("已保存到本地");
+  await saveAndSync(hasCloudConfig() ? "已保存，正在同步" : "已保存到本地");
 }
 
-function deleteSelectedRecord() {
+async function deleteSelectedRecord() {
   const id = $("#recordId").value;
   if (!id) return;
-  const ok = window.confirm("确定删除这条记录吗？这个操作只会删除本地数据，上传后才会覆盖云端。");
+  const ok = window.confirm("确定删除这条记录吗？配置了 JsonBin 时会同步删除到云端。");
   if (!ok) return;
   state.records = state.records.filter((item) => item.id !== id);
   if (state.selectedId === id) state.selectedId = null;
   els.recordDialog.close();
-  saveLocal("已删除");
+  await saveAndSync(hasCloudConfig() ? "已删除，正在同步" : "已删除");
 }
 
 function openReviewDialog(id) {
@@ -424,7 +437,7 @@ function openReviewDialog(id) {
   els.reviewDialog.showModal();
 }
 
-function saveReviewFromForm() {
+async function saveReviewFromForm() {
   const id = $("#reviewRecordId").value;
   const record = state.records.find((item) => item.id === id);
   if (!record) return;
@@ -439,7 +452,7 @@ function saveReviewFromForm() {
   });
   record.updatedAt = new Date().toISOString();
   els.reviewDialog.close();
-  saveLocal("已补充回看");
+  await saveAndSync(hasCloudConfig() ? "已补充回看，正在同步" : "已补充回看");
 }
 
 async function createCloudBin() {
@@ -464,7 +477,7 @@ async function createCloudBin() {
   state.config.binId = data.metadata.id;
   els.binIdInput.value = state.config.binId;
   saveConfig();
-  showToast("已创建云端库，并保存 Bin ID");
+  showToast("已创建云端库，之后会自动同步");
 }
 
 async function saveCloud() {
@@ -484,7 +497,7 @@ async function saveCloud() {
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "上传失败");
-  showToast("已上传到 JsonBin");
+  showToast("已同步到 JsonBin");
 }
 
 async function loadCloud() {
@@ -501,7 +514,42 @@ async function loadCloud() {
   if (!response.ok) throw new Error(data.message || "下载失败");
   const cloudRecords = normalizeCloudData(data.record);
   state.records = mergeRecords(state.records, cloudRecords);
-  saveLocal(`已下载并合并 ${cloudRecords.length} 条云端记录`);
+  saveLocal(`已从云端同步 ${cloudRecords.length} 条记录`);
+}
+
+async function autoSyncToCloud() {
+  if (!hasCloudConfig() || state.syncing) return;
+  state.syncing = true;
+  updateSyncState();
+  try {
+    await saveCloud();
+  } catch (error) {
+    showToast(`自动同步失败：${error.message || "请稍后手动上传"}`);
+  } finally {
+    state.syncing = false;
+    updateSyncState();
+  }
+}
+
+async function autoLoadFromCloud() {
+  if (!hasCloudConfig() || state.syncing) return;
+  state.syncing = true;
+  updateSyncState();
+  try {
+    const before = JSON.stringify(state.records);
+    await loadCloud();
+    const after = JSON.stringify(state.records);
+    if (before !== after) {
+      state.syncing = false;
+      await autoSyncToCloud();
+      state.syncing = true;
+    }
+  } catch (error) {
+    showToast(`自动下载失败：${error.message || "请稍后手动下载"}`);
+  } finally {
+    state.syncing = false;
+    updateSyncState();
+  }
 }
 
 function exportData() {
@@ -517,12 +565,12 @@ function exportData() {
 function importData(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const parsed = JSON.parse(reader.result);
       const imported = normalizeCloudData(parsed);
       state.records = mergeRecords(state.records, imported);
-      saveLocal(`已导入并合并 ${imported.length} 条记录`);
+      await saveAndSync(`已导入并合并 ${imported.length} 条记录`);
     } catch {
       showToast("导入失败：文件不是可识别的 JSON");
     }
@@ -558,9 +606,9 @@ function bindEvents() {
     }
   });
 
-  els.reviewForm.addEventListener("submit", (event) => {
+  els.reviewForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    saveReviewFromForm();
+    await saveReviewFromForm();
   });
 
   els.cardsContainer.addEventListener("click", (event) => {
@@ -586,7 +634,10 @@ function bindEvents() {
   });
 
   [els.searchInput, els.topicFilter, els.reviewFilter].forEach((input) => input.addEventListener("input", render));
-  [els.apiKeyInput, els.binIdInput].forEach((input) => input.addEventListener("change", saveConfig));
+  [els.apiKeyInput, els.binIdInput].forEach((input) => input.addEventListener("change", () => {
+    saveConfig();
+    if (hasCloudConfig()) withCloud(autoLoadFromCloud);
+  }));
 
   $("#createBinBtn").addEventListener("click", () => withCloud(createCloudBin));
   $("#saveCloudBtn").addEventListener("click", () => withCloud(saveCloud));
@@ -648,3 +699,4 @@ loadLocal();
 seedIfEmpty();
 bindEvents();
 render();
+autoLoadFromCloud();
