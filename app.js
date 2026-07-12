@@ -43,6 +43,65 @@ const els = {
   photoInput: $("#photoInput")
 };
 
+const MAJOR_ARCANA = ["愚者", "魔术师", "女祭司", "女皇", "皇帝", "教皇", "恋人", "战车", "力量", "隐士", "命运之轮", "正义", "倒吊人", "死神", "节制", "恶魔", "高塔", "星星", "月亮", "太阳", "审判", "世界"];
+const MAJOR_ALIASES = { "愚人": "愚者", "魔法师": "魔术师", "吊人": "倒吊人", "死亡": "死神", "塔": "高塔", "星辰": "星星" };
+const ROMAN_NUMERALS = ["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI"];
+const MINOR_RANKS = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "侍从", "骑士", "王后", "国王"];
+const SUITS = {
+  "权杖": { symbol: "🔥", className: "suit-wands" },
+  "圣杯": { symbol: "💧", className: "suit-cups" },
+  "宝剑": { symbol: "⚔️", className: "suit-swords" },
+  "星币": { symbol: "🪙", className: "suit-pents" }
+};
+const ALL_CARDS = [
+  ...MAJOR_ARCANA,
+  ...Object.keys(SUITS).flatMap((suit) => MINOR_RANKS.map((rank) => `${suit}${rank}`))
+];
+
+function cardMeta(name) {
+  const clean = String(name || "").trim();
+  for (const [suit, meta] of Object.entries(SUITS)) {
+    if (clean.startsWith(suit)) {
+      return { ...meta, corner: clean.slice(suit.length) };
+    }
+  }
+  const majorName = MAJOR_ALIASES[clean] || clean;
+  const majorIndex = MAJOR_ARCANA.indexOf(majorName);
+  if (majorIndex >= 0) {
+    return { symbol: "✨", className: "suit-major", corner: ROMAN_NUMERALS[majorIndex] };
+  }
+  return { symbol: "🔮", className: "suit-unknown", corner: "" };
+}
+
+function cardFaceHtml(card) {
+  const meta = cardMeta(card.name);
+  const reversed = card.orientation === "逆位";
+  return `
+    <div class="card-face ${meta.className}${reversed ? " reversed" : ""}">
+      <span class="card-face-corner">${escapeHtml(meta.corner)}</span>
+      <span class="card-face-symbol">${meta.symbol}</span>
+      <span class="card-face-name">${escapeHtml(card.name || "？")}</span>
+      ${reversed ? `<span class="card-face-reversed">逆</span>` : ""}
+    </div>`;
+}
+
+function cardChipsHtml(record) {
+  const cards = (record.cards || []).filter((card) => card.name);
+  if (!cards.length) return "<p>未填写牌名</p>";
+  return `<div class="card-chips">${cards.map((card) => {
+    const meta = cardMeta(card.name);
+    const reversed = card.orientation === "逆位";
+    return `<span class="card-chip ${meta.className}${reversed ? " reversed" : ""}"><i>${meta.symbol}</i>${escapeHtml(card.name)}${reversed ? "<b>逆</b>" : ""}</span>`;
+  }).join("")}</div>`;
+}
+
+function buildCardDatalist() {
+  const datalist = document.createElement("datalist");
+  datalist.id = "tarotCardList";
+  datalist.innerHTML = ALL_CARDS.map((name) => `<option value="${name}"></option>`).join("");
+  document.body.appendChild(datalist);
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -202,7 +261,7 @@ function renderStats() {
     });
   });
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  els.topCard.textContent = top ? `${top[0]} ${top[1]}次` : "-";
+  els.topCard.textContent = top ? `${cardMeta(top[0]).symbol} ${top[0]} ${top[1]}次` : "-";
 }
 
 function renderList() {
@@ -215,7 +274,6 @@ function renderList() {
   }
 
   els.recordList.innerHTML = records.map((record) => {
-    const cards = (record.cards || []).map((card) => card.name).filter(Boolean).join(" / ") || "未填写牌名";
     const reviewed = (record.reviews || []).length > 0 ? "已回看" : "未回看";
     const thumb = record.photo ? `<img class="record-thumb" src="${record.photo}" alt="牌面照片">` : "";
     return `
@@ -227,7 +285,7 @@ function renderList() {
           <span class="tag">${reviewed}</span>
         </div>
         <h3>${escapeHtml(record.question || "未命名记录")}</h3>
-        <p>${escapeHtml(cards)}</p>
+        ${cardChipsHtml(record)}
       </button>
     `;
   }).join("");
@@ -242,11 +300,14 @@ function renderDetail() {
 
   const cardsHtml = (record.cards || []).map((card) => `
     <div class="tarot-card">
-      <span class="tag">${escapeHtml(card.position || "位置")}</span>
-      <h4>${escapeHtml(card.name || "未填牌名")} ${card.orientation ? `· ${escapeHtml(card.orientation)}` : ""}</h4>
-      <p>${escapeHtml(card.firstFeeling || "")}</p>
-      <p>${escapeHtml(card.personalMeaning || "")}</p>
-      ${card.keywords ? `<p><strong>关键词：</strong>${escapeHtml(card.keywords)}</p>` : ""}
+      ${cardFaceHtml(card)}
+      <div class="tarot-card-body">
+        <span class="tag">${escapeHtml(card.position || "位置")}</span>
+        <h4>${escapeHtml(card.name || "未填牌名")} ${card.orientation ? `· ${escapeHtml(card.orientation)}` : ""}</h4>
+        <p>${escapeHtml(card.firstFeeling || "")}</p>
+        <p>${escapeHtml(card.personalMeaning || "")}</p>
+        ${card.keywords ? `<p><strong>关键词：</strong>${escapeHtml(card.keywords)}</p>` : ""}
+      </div>
     </div>
   `).join("");
 
@@ -392,7 +453,7 @@ function addCardEditor(card = {}) {
     </div>
     <div class="form-grid">
       <label>位置<input data-field="position" type="text" value="${escapeHtml(card.position || "")}" placeholder="情况 / 阻碍 / 建议"></label>
-      <label>牌名<input data-field="name" type="text" value="${escapeHtml(card.name || "")}" placeholder="比如：圣杯八"></label>
+      <label>牌名<input data-field="name" type="text" list="tarotCardList" value="${escapeHtml(card.name || "")}" placeholder="比如：圣杯八"></label>
       <label>正位 / 逆位
         <select data-field="orientation">
           <option ${card.orientation === "正位" ? "selected" : ""}>正位</option>
@@ -758,6 +819,7 @@ function seedIfEmpty() {
 
 loadLocal();
 seedIfEmpty();
+buildCardDatalist();
 bindEvents();
 render();
 syncNow("auto");
