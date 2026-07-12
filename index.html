@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>我的塔罗记录</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">T</span>
+          <div>
+            <h1>我的塔罗记录</h1>
+            <p>记录问题、牌面、解释和后来的回看。</p>
+          </div>
+        </div>
+
+        <div class="photo-panel">
+          <img src="Snipaste_2026-07-12_15-57-10.png" alt="塔罗牌面照片">
+        </div>
+
+        <section class="sync-panel" id="syncPanel">
+          <div class="section-title">
+            <h2>云端同步</h2>
+            <span id="syncState">仅本地</span>
+          </div>
+          <div id="syncSummary" class="sync-summary" hidden>
+            <p>JsonBin 已连接</p>
+            <div class="button-grid">
+              <button id="quickSaveCloudBtn" class="secondary" type="button">上传</button>
+              <button id="quickLoadCloudBtn" class="secondary" type="button">下载</button>
+              <button id="editCloudConfigBtn" class="ghost" type="button">修改设置</button>
+            </div>
+          </div>
+          <div id="syncSetup">
+            <label>
+              JsonBin API Key
+              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="X-Master-Key">
+            </label>
+            <label>
+              Bin ID
+              <input id="binIdInput" type="text" autocomplete="off" placeholder="留空可先创建">
+            </label>
+            <div class="button-grid">
+              <button id="createBinBtn" class="secondary" type="button">创建云端库</button>
+              <button id="saveCloudBtn" class="secondary" type="button">上传</button>
+              <button id="loadCloudBtn" class="secondary" type="button">下载</button>
+              <button id="clearCloudConfigBtn" class="ghost" type="button">清除设置</button>
+            </div>
+            <p class="hint">API Key 只保存在这台设备的浏览器里。手机同步时，需要在手机网页里填同一个 Key 和 Bin ID。</p>
+          </div>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Personal Tarot Journal</p>
+            <h2>每一次抽牌，都留一份之后能看懂的记录。</h2>
+          </div>
+          <button id="newRecordBtn" class="primary" type="button">新建记录</button>
+        </header>
+
+        <section class="tools">
+          <div class="search-wrap">
+            <input id="searchInput" type="search" placeholder="搜索问题、牌名、解释、关键词">
+          </div>
+          <select id="topicFilter" aria-label="主题筛选">
+            <option value="全部">全部主题</option>
+            <option value="感情">感情</option>
+            <option value="工作">工作</option>
+            <option value="金钱">金钱</option>
+            <option value="自我成长">自我成长</option>
+            <option value="人际关系">人际关系</option>
+            <option value="其他">其他</option>
+          </select>
+          <select id="reviewFilter" aria-label="回看筛选">
+            <option value="全部">全部状态</option>
+            <option value="未回看">未回看</option>
+            <option value="已回看">已回看</option>
+          </select>
+          <button id="exportBtn" class="secondary" type="button">导出</button>
+          <label class="file-button">
+            导入
+            <input id="importInput" type="file" accept="application/json">
+          </label>
+        </section>
+
+        <section class="stats" aria-label="记录统计">
+          <div>
+            <span id="totalCount">0</span>
+            <p>总记录</p>
+          </div>
+          <div>
+            <span id="reviewedCount">0</span>
+            <p>已回看</p>
+          </div>
+          <div>
+            <span id="topCard">-</span>
+            <p>最常出现</p>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <div class="list-panel">
+            <div class="section-title">
+              <h2>记录列表</h2>
+              <span id="visibleCount">0 条</span>
+            </div>
+            <div id="recordList" class="record-list"></div>
+          </div>
+
+          <article id="detailPanel" class="detail-panel">
+            <div class="empty-state">
+              <h3>还没有选中记录</h3>
+              <p>新建一条记录，或从左侧列表打开过去的牌面。</p>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="recordDialog">
+      <form id="recordForm" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Tarot Entry</p>
+            <h2 id="dialogTitle">新建记录</h2>
+          </div>
+          <button id="closeDialogBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+        </div>
+
+        <input id="recordId" type="hidden">
+        <input id="photoDataInput" type="hidden">
+
+        <section class="photo-uploader">
+          <div>
+            <p class="eyebrow">Photo</p>
+            <h3>牌面照片</h3>
+          </div>
+          <label class="upload-box" for="photoInput">
+            <input id="photoInput" type="file" accept="image/*">
+            <span>上传本次抽牌照片</span>
+            <small>会自动压缩后保存，适合手机同步。</small>
+          </label>
+          <div id="photoPreviewWrap" class="photo-preview" hidden>
+            <img id="photoPreview" alt="本次牌面照片预览">
+            <button id="removePhotoBtn" class="ghost" type="button">移除照片</button>
+          </div>
+        </section>
+
+        <div class="form-grid">
+          <label>
+            日期
+            <input id="dateInput" type="date" required>
+          </label>
+          <label>
+            时间
+            <input id="timeInput" type="time">
+          </label>
+          <label>
+            主题
+            <select id="topicInput">
+              <option>感情</option>
+              <option>工作</option>
+              <option>金钱</option>
+              <option selected>自我成长</option>
+              <option>人际关系</option>
+              <option>其他</option>
+            </select>
+          </label>
+          <label>
+            当时情绪
+            <input id="moodInput" type="text" placeholder="比如：迷茫、期待、焦虑、平静">
+          </label>
+        </div>
+
+        <label>
+          我的问题
+          <textarea id="questionInput" required placeholder="这次真正想问什么？"></textarea>
+        </label>
+
+        <label>
+          问题背后的真实担心
+          <textarea id="concernInput" placeholder="我为什么会想问这个？我害怕或期待什么？"></textarea>
+        </label>
+
+        <div class="form-grid">
+          <label>
+            牌阵
+            <input id="spreadInput" type="text" value="三张牌：情况 / 阻碍 / 建议">
+          </label>
+          <label>
+            重要程度
+            <select id="importanceInput">
+              <option>普通</option>
+              <option>重要</option>
+              <option>非常重要</option>
+            </select>
+          </label>
+        </div>
+
+        <section class="cards-editor">
+          <div class="section-title">
+            <h3>抽到的牌</h3>
+            <button id="addCardBtn" class="secondary" type="button">加一张牌</button>
+          </div>
+          <div id="cardsContainer"></div>
+        </section>
+
+        <label>
+          整体解释
+          <textarea id="readingInput" placeholder="这组牌像是在讲什么故事？"></textarea>
+        </label>
+
+        <label>
+          这次牌给我的提醒
+          <textarea id="reminderInput" placeholder="它最想让我看见什么？"></textarea>
+        </label>
+
+        <label>
+          我准备怎么做
+          <textarea id="actionInput" placeholder="一个具体行动，或一个态度上的调整。"></textarea>
+        </label>
+
+        <div class="dialog-actions">
+          <button id="deleteRecordBtn" class="danger" type="button">删除</button>
+          <div>
+            <button class="secondary" type="button" id="cancelBtn">取消</button>
+            <button class="primary" type="submit">保存记录</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="reviewDialog">
+      <form id="reviewForm" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Review</p>
+            <h2>补充回看</h2>
+          </div>
+          <button id="closeReviewBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+        </div>
+        <input id="reviewRecordId" type="hidden">
+        <label>
+          回看日期
+          <input id="reviewDateInput" type="date" required>
+        </label>
+        <label>
+          后来发生了什么
+          <textarea id="reviewOutcomeInput" required></textarea>
+        </label>
+        <label>
+          当时解释里准确的部分
+          <textarea id="reviewAccurateInput"></textarea>
+        </label>
+        <label>
+          当时解释里偏差的部分
+          <textarea id="reviewMissInput"></textarea>
+        </label>
+        <label>
+          现在重新理解
+          <textarea id="reviewRereadInput"></textarea>
+        </label>
+        <div class="dialog-actions right">
+          <button class="secondary" type="button" id="cancelReviewBtn">取消</button>
+          <button class="primary" type="submit">保存回看</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
