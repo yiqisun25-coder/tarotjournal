@@ -4,59 +4,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的塔罗记录</title>
-    <link rel="stylesheet" href="style.css?v=20260712c">
+    <link rel="stylesheet" href="style.css?v=20260712d">
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <span class="brand-mark">T</span>
-          <div>
-            <h1>我的塔罗记录</h1>
-            <p>记录问题、牌面、解释和后来的回看。</p>
-          </div>
-        </div>
-
-        <section class="sync-panel" id="syncPanel">
-          <div class="section-title">
-            <h2>云端同步</h2>
-            <span id="syncState">仅本地</span>
-          </div>
-          <div id="syncSummary" class="sync-summary" hidden>
-            <p>JsonBin 已连接，打开页面和保存时都会自动双向同步</p>
-            <div class="button-grid">
-              <button id="quickSaveCloudBtn" class="secondary" type="button">上传</button>
-              <button id="quickLoadCloudBtn" class="secondary" type="button">下载</button>
-              <button id="editCloudConfigBtn" class="ghost" type="button">修改设置</button>
-            </div>
-          </div>
-          <div id="syncSetup">
-            <label>
-              JsonBin API Key
-              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="X-Master-Key">
-            </label>
-            <label>
-              Bin ID
-              <input id="binIdInput" type="text" autocomplete="off" placeholder="留空可先创建">
-            </label>
-            <div class="button-grid">
-              <button id="createBinBtn" class="secondary" type="button">创建云端库</button>
-              <button id="saveCloudBtn" class="secondary" type="button">上传</button>
-              <button id="loadCloudBtn" class="secondary" type="button">下载</button>
-              <button id="clearCloudConfigBtn" class="ghost" type="button">清除设置</button>
-            </div>
-            <p class="hint">API Key 只保存在这台设备的浏览器里。手机同步时，需要在手机网页里填同一个 Key 和 Bin ID。</p>
-          </div>
-        </section>
-      </aside>
-
       <main class="main">
         <header class="topbar">
           <div>
             <p class="eyebrow">Personal Tarot Journal</p>
             <h2>每一次抽牌，都留一份之后能看懂的记录。</h2>
           </div>
-          <button id="newRecordBtn" class="primary" type="button">新建记录</button>
+          <div class="topbar-actions">
+            <button id="syncChipBtn" class="secondary" type="button" title="云端同步设置">☁️ <span id="syncState">仅本地</span></button>
+            <button id="newRecordBtn" class="primary" type="button">新建记录</button>
+          </div>
         </header>
 
         <section class="tools">
@@ -244,6 +205,45 @@
       </form>
     </dialog>
 
+    <dialog id="syncDialog">
+      <div class="sync-dialog-body">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Cloud Sync</p>
+            <h2>云端同步</h2>
+          </div>
+          <button id="closeSyncBtn" class="icon-button" type="button" aria-label="关闭">×</button>
+        </div>
+        <div id="syncSummary" class="sync-summary" hidden>
+          <p>已连接，打开页面和保存时会自动双向同步。</p>
+          <div class="button-grid">
+            <button id="copyPairLinkBtn" class="primary" type="button">复制手机配对链接</button>
+            <button id="quickSaveCloudBtn" class="secondary" type="button">手动上传</button>
+            <button id="quickLoadCloudBtn" class="secondary" type="button">手动下载</button>
+            <button id="editCloudConfigBtn" class="ghost" type="button">修改设置</button>
+          </div>
+          <p class="hint">换新设备时点「复制手机配对链接」，用新设备的浏览器打开一次，就会自动连上，无需输入任何密钥。</p>
+        </div>
+        <div id="syncSetup">
+          <label>
+            JsonBin API Key
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="X-Master-Key">
+          </label>
+          <label>
+            Bin ID
+            <input id="binIdInput" type="text" autocomplete="off" placeholder="留空可先创建">
+          </label>
+          <div class="button-grid">
+            <button id="createBinBtn" class="secondary" type="button">创建云端库</button>
+            <button id="saveCloudBtn" class="secondary" type="button">上传</button>
+            <button id="loadCloudBtn" class="secondary" type="button">下载</button>
+            <button id="clearCloudConfigBtn" class="ghost" type="button">清除设置</button>
+          </div>
+          <p class="hint">API Key 只保存在这台设备的浏览器里，不会出现在网页代码中。</p>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="reviewDialog">
       <form id="reviewForm" method="dialog">
         <div class="dialog-head">
@@ -282,7 +282,7 @@
     </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>
-    <script src="tarot-data.js?v=20260712c"></script>
-    <script src="app.js?v=20260712c"></script>
+    <script src="tarot-data.js?v=20260712d"></script>
+    <script src="app.js?v=20260712d"></script>
   </body>
 </html>

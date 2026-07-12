@@ -31,6 +31,7 @@ const els = {
   syncSetup: $("#syncSetup"),
   syncSummary: $("#syncSummary"),
   syncState: $("#syncState"),
+  syncDialog: $("#syncDialog"),
   apiKeyInput: $("#apiKeyInput"),
   binIdInput: $("#binIdInput"),
   toast: $("#toast"),
@@ -227,19 +228,36 @@ function updateSyncState() {
     els.syncState.textContent = "同步中…";
   } else if (hasCloudConfig()) {
     const stamp = state.lastSyncAt
-      ? ` · ${String(state.lastSyncAt.getHours()).padStart(2, "0")}:${String(state.lastSyncAt.getMinutes()).padStart(2, "0")}`
+      ? ` ${String(state.lastSyncAt.getHours()).padStart(2, "0")}:${String(state.lastSyncAt.getMinutes()).padStart(2, "0")}`
       : "";
-    els.syncState.textContent = `自动同步${stamp}`;
-    els.syncSetup.hidden = true;
-    els.syncSummary.hidden = false;
-  } else if (state.config.apiKey) {
-    els.syncState.textContent = "可创建";
-    els.syncSetup.hidden = false;
-    els.syncSummary.hidden = true;
+    els.syncState.textContent = `已同步${stamp}`;
   } else {
     els.syncState.textContent = "仅本地";
-    els.syncSetup.hidden = false;
-    els.syncSummary.hidden = true;
+  }
+  els.syncSetup.hidden = hasCloudConfig();
+  els.syncSummary.hidden = !hasCloudConfig();
+}
+
+// 配对链接：#sync=Key:BinId 只存在于链接里，打开一次就写进本机并从地址栏抹掉
+function parseSyncHash() {
+  const match = location.hash.match(/^#sync=([^:]+):(.+)$/);
+  if (!match) return;
+  state.config.apiKey = decodeURIComponent(match[1]);
+  state.config.binId = decodeURIComponent(match[2]);
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(state.config));
+  els.apiKeyInput.value = state.config.apiKey;
+  els.binIdInput.value = state.config.binId;
+  history.replaceState(null, "", location.pathname + location.search);
+  showToast("已通过配对链接连接云端，开始自动同步");
+}
+
+async function copyPairLink() {
+  const link = `${location.origin}${location.pathname}#sync=${encodeURIComponent(state.config.apiKey)}:${encodeURIComponent(state.config.binId)}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("配对链接已复制，发给自己后用新设备打开一次即可");
+  } catch {
+    window.prompt("手动复制这个链接，用新设备打开一次：", link);
   }
 }
 
@@ -802,6 +820,9 @@ function bindEvents() {
     if (hasCloudConfig()) syncNow("manual");
   }));
 
+  $("#syncChipBtn").addEventListener("click", () => els.syncDialog.showModal());
+  $("#closeSyncBtn").addEventListener("click", () => els.syncDialog.close());
+  $("#copyPairLinkBtn").addEventListener("click", copyPairLink);
   $("#createBinBtn").addEventListener("click", () => withCloud(createCloudBin));
   $("#saveCloudBtn").addEventListener("click", () => syncNow("manual"));
   $("#loadCloudBtn").addEventListener("click", () => syncNow("manual"));
@@ -871,6 +892,7 @@ function seedIfEmpty() {
 }
 
 loadLocal();
+parseSyncHash();
 seedIfEmpty();
 buildCardDatalist();
 bindEvents();
@@ -878,6 +900,10 @@ render();
 syncNow("auto");
 
 // 切回这个页面 / 重新联网时自动再同步一次，手机长期开着页面也能拿到电脑上的新记录
+window.addEventListener("hashchange", () => {
+  parseSyncHash();
+  if (hasCloudConfig()) syncNow("manual");
+});
 window.addEventListener("focus", syncOnReturn);
 window.addEventListener("online", syncOnReturn);
 document.addEventListener("visibilitychange", () => {
