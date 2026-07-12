@@ -288,13 +288,36 @@ textarea:focus {
   align-items: flex-start;
 }
 
+.daily-cards {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-content: start;
+}
+
+.daily-cards:has(.daily-card-img--sm) {
+  grid-template-columns: 1fr 1fr;
+}
+
 .daily-card-img {
-  flex: 0 0 156px;
   width: 156px;
   border-radius: 10px;
   border: 1px solid var(--line);
   box-shadow: 0 10px 24px rgba(50, 38, 27, 0.18);
   display: block;
+}
+
+.daily-card-img--sm {
+  width: 108px;
+}
+
+.daily-thesis {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  line-height: 1.6;
+  padding: 4px 0;
 }
 
 .daily-info {
@@ -828,9 +851,22 @@ form {
     gap: 14px;
   }
 
-  .daily-card-img {
-    flex-basis: 118px;
+  .daily-body {
+    flex-direction: column;
+  }
+
+  .daily-cards {
+    grid-template-columns: repeat(auto-fill, 96px);
+    width: 100%;
+  }
+
+  .daily-card-img,
+  .daily-card-img--sm {
     width: 118px;
+  }
+
+  .daily-card-img--sm {
+    width: 96px;
   }
 
   .daily-nav {

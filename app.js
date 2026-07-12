@@ -47,7 +47,7 @@ const els = {
 };
 
 const MAJOR_ARCANA = ["愚者", "魔术师", "女祭司", "女皇", "皇帝", "教皇", "恋人", "战车", "力量", "隐士", "命运之轮", "正义", "倒吊人", "死神", "节制", "恶魔", "高塔", "星星", "月亮", "太阳", "审判", "世界"];
-const MAJOR_ALIASES = { "愚人": "愚者", "魔法师": "魔术师", "吊人": "倒吊人", "死亡": "死神", "塔": "高塔", "星辰": "星星" };
+const MAJOR_ALIASES = { "愚人": "愚者", "魔法师": "魔术师", "皇后": "女皇", "隐者": "隐士", "吊人": "倒吊人", "死亡": "死神", "塔": "高塔", "星辰": "星星" };
 const ROMAN_NUMERALS = ["0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI"];
 const MINOR_RANKS = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "侍从", "骑士", "王后", "国王"];
 const SUITS = {
@@ -62,7 +62,7 @@ const ALL_CARDS = [
 ];
 
 function cardMeta(name) {
-  const clean = String(name || "").trim();
+  const clean = String(name || "").trim().replace(/^钱币/, "星币");
   for (const [suit, meta] of Object.entries(SUITS)) {
     if (clean.startsWith(suit)) {
       return { ...meta, corner: clean.slice(suit.length) };
@@ -81,7 +81,7 @@ const RANK_FILE_NUM = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六":
 const SUIT_FILE = { "权杖": "wands", "圣杯": "cups", "宝剑": "swords", "星币": "pents" };
 
 function cardImagePath(name) {
-  const clean = String(name || "").trim();
+  const clean = String(name || "").trim().replace(/^钱币/, "星币");
   for (const [suit, file] of Object.entries(SUIT_FILE)) {
     if (clean.startsWith(suit)) {
       const num = RANK_FILE_NUM[clean.slice(suit.length)];
@@ -285,7 +285,7 @@ function render() {
   renderDetail();
 }
 
-// 用日期决定今天学哪张牌：每台设备算出来都一样，不需要同步
+// 用日期决定今天学哪个单元：每台设备算出来都一样，不需要同步
 const DAILY_EPOCH = Date.UTC(2026, 6, 12);
 let dailyOffset = 0;
 
@@ -293,36 +293,52 @@ function dailyIndexToday() {
   const now = new Date();
   const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const days = Math.round((todayUtc - DAILY_EPOCH) / 86400000);
-  return ((days % ALL_CARDS.length) + ALL_CARDS.length) % ALL_CARDS.length;
+  return ((days % LEARNING_UNITS.length) + LEARNING_UNITS.length) % LEARNING_UNITS.length;
+}
+
+function drawnCountFor(name) {
+  return activeRecords().filter((record) =>
+    (record.cards || []).some((card) => (card.name || "").trim() === name)
+  ).length;
 }
 
 function renderDaily() {
   if (!els.dailyBody) return;
-  const total = ALL_CARDS.length;
+  const total = LEARNING_UNITS.length;
   const index = (((dailyIndexToday() + dailyOffset) % total) + total) % total;
-  const name = ALL_CARDS[index];
-  const meaning = TAROT_MEANINGS[name] || { keywords: "", upright: "", reversed: "", question: "" };
-  const drawnCount = activeRecords().filter((record) =>
-    (record.cards || []).some((card) => (card.name || "").trim() === name)
-  ).length;
+  const unit = LEARNING_UNITS[index];
+  els.dailyProgress.textContent = `第 ${index + 1} / ${total} 天 · ${unit.phase}`;
 
-  const imagePath = cardImagePath(name);
-  els.dailyProgress.textContent = `第 ${index + 1} / ${total} 张`;
+  const cards = unit.cards || [];
+  const multi = cards.length > 1;
+  const imagesHtml = cards.map((name) => {
+    const path = cardImagePath(name);
+    return path
+      ? `<img class="daily-card-img${multi ? " daily-card-img--sm" : ""}" src="${path}" alt="${escapeHtml(name)}牌面" title="${escapeHtml(name)}">`
+      : "";
+  }).join("");
+
+  const sectionsHtml = (unit.sections || []).map((section) => {
+    const text = escapeHtml(section.text).replaceAll("\n", "<br>");
+    return section.quote
+      ? `<p class="daily-thesis">${text}</p>`
+      : `<p><strong>${escapeHtml(section.label)}：</strong>${text}</p>`;
+  }).join("");
+
+  const single = cards.length === 1 ? cards[0] : null;
+  const drawn = single ? drawnCountFor(single) : 0;
+
   els.dailyBody.innerHTML = `
-    ${imagePath
-      ? `<img class="daily-card-img" src="${imagePath}" alt="${escapeHtml(name)}牌面">`
-      : cardFaceHtml({ name, orientation: "正位" })}
+    ${imagesHtml ? `<div class="daily-cards">${imagesHtml}</div>` : ""}
     <div class="daily-info">
       <h3>
-        ${escapeHtml(name)}
+        ${escapeHtml(unit.title)}
         ${dailyOffset === 0 ? `<span class="tag">今日</span>` : ""}
-        <span class="daily-count">${drawnCount ? `我抽到过 ${drawnCount} 次` : "还没抽到过"}</span>
+        ${single ? `<span class="daily-count">${drawn ? `我抽到过 ${drawn} 次` : "还没抽到过"}</span>` : ""}
       </h3>
-      <p><strong>关键词：</strong>${escapeHtml(meaning.keywords)}</p>
-      <p><strong>正位：</strong>${escapeHtml(meaning.upright)}</p>
-      <p><strong>逆位：</strong>${escapeHtml(meaning.reversed)}</p>
-      <p class="daily-question">✍️ ${escapeHtml(meaning.question)}</p>
-      ${drawnCount ? `<button class="ghost" type="button" data-daily-search="${escapeHtml(name)}">查看我抽到这张牌的记录</button>` : ""}
+      ${sectionsHtml}
+      ${unit.task ? `<p class="daily-question">✍️ 今日动作：${escapeHtml(unit.task)}</p>` : ""}
+      ${single && drawn ? `<button class="ghost" type="button" data-daily-search="${escapeHtml(single)}">查看我抽到这张牌的记录</button>` : ""}
     </div>
   `;
 }
