@@ -1,12 +1,17 @@
 const STORAGE_KEY = "tarotJournal.records.v1";
 const CONFIG_KEY = "tarotJournal.jsonbin.v1";
 const JSONBIN_URL = "https://api.jsonbin.io/v3/b";
+// JsonBin 免费版整个库上限 100KB，照片和总数据都必须控制在这个范围内
+const BIN_SIZE_LIMIT = 95000;
+const PHOTO_BUDGET = 30000;
+const TOMBSTONE_DAYS = 60;
 
 const state = {
   records: [],
   selectedId: null,
   config: { apiKey: "", binId: "" },
-  syncing: false
+  syncing: false,
+  lastSyncAt: null
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -79,8 +84,7 @@ function hasCloudConfig() {
 
 async function saveAndSync(localMessage = "已保存到本地") {
   saveLocal(localMessage);
-  if (!hasCloudConfig()) return;
-  await autoSyncToCloud();
+  scheduleSync();
 }
 
 function saveConfig() {
@@ -104,15 +108,36 @@ function normalizeCloudData(data) {
   return [];
 }
 
+function pickRecord(current, challenger) {
+  const currentStamp = current.updatedAt || current.createdAt || "";
+  const challengerStamp = challenger.updatedAt || challenger.createdAt || "";
+  const winner = challengerStamp > currentStamp ? challenger : current;
+  const loser = winner === challenger ? current : challenger;
+  // 赢的那份如果因为云端容量丢了照片，从另一份里补回来
+  if (!winner.photo && loser.photo && (winner.photoOmitted || challengerStamp === currentStamp)) {
+    return { ...winner, photo: loser.photo, photoOmitted: false };
+  }
+  return winner;
+}
+
+function isLiveOrRecentTombstone(record) {
+  if (!record.deleted) return true;
+  const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 24 * 3600 * 1000).toISOString();
+  return (record.updatedAt || record.createdAt || "") > cutoff;
+}
+
 function mergeRecords(localRecords, cloudRecords) {
   const map = new Map();
   [...cloudRecords, ...localRecords].forEach((record) => {
+    if (!record || !record.id) return;
     const existing = map.get(record.id);
-    if (!existing || (record.updatedAt || record.createdAt || "") > (existing.updatedAt || existing.createdAt || "")) {
-      map.set(record.id, record);
-    }
+    map.set(record.id, existing ? pickRecord(existing, record) : record);
   });
-  return [...map.values()].sort(sortRecords);
+  return [...map.values()].filter(isLiveOrRecentTombstone).sort(sortRecords);
+}
+
+function activeRecords() {
+  return state.records.filter((record) => !record.deleted);
 }
 
 function sortRecords(a, b) {
@@ -124,7 +149,7 @@ function filteredRecords() {
   const topic = els.topicFilter.value;
   const review = els.reviewFilter.value;
 
-  return state.records
+  return activeRecords()
     .filter((record) => {
       const text = JSON.stringify(record).toLowerCase();
       const matchesQuery = !query || text.includes(query);
@@ -138,9 +163,12 @@ function filteredRecords() {
 
 function updateSyncState() {
   if (state.syncing) {
-    els.syncState.textContent = "同步中";
+    els.syncState.textContent = "同步中…";
   } else if (hasCloudConfig()) {
-    els.syncState.textContent = "自动同步";
+    const stamp = state.lastSyncAt
+      ? ` · ${String(state.lastSyncAt.getHours()).padStart(2, "0")}:${String(state.lastSyncAt.getMinutes()).padStart(2, "0")}`
+      : "";
+    els.syncState.textContent = `自动同步${stamp}`;
     els.syncSetup.hidden = true;
     els.syncSummary.hidden = false;
   } else if (state.config.apiKey) {
@@ -162,11 +190,12 @@ function render() {
 }
 
 function renderStats() {
-  els.totalCount.textContent = state.records.length;
-  els.reviewedCount.textContent = state.records.filter((item) => (item.reviews || []).length > 0).length;
+  const records = activeRecords();
+  els.totalCount.textContent = records.length;
+  els.reviewedCount.textContent = records.filter((item) => (item.reviews || []).length > 0).length;
 
   const counts = {};
-  state.records.forEach((record) => {
+  records.forEach((record) => {
     (record.cards || []).forEach((card) => {
       if (!card.name) return;
       counts[card.name] = (counts[card.name] || 0) + 1;
@@ -205,7 +234,7 @@ function renderList() {
 }
 
 function renderDetail() {
-  const record = state.records.find((item) => item.id === state.selectedId);
+  const record = activeRecords().find((item) => item.id === state.selectedId);
   if (!record) {
     els.detailPanel.innerHTML = `<div class="empty-state"><h3>还没有选中记录</h3><p>新建一条记录，或从左侧列表打开过去的牌面。</p></div>`;
     return;
@@ -331,14 +360,20 @@ function compressImage(file) {
       const image = new Image();
       image.onerror = () => reject(new Error("照片格式无法识别"));
       image.onload = () => {
-        const maxSide = 1400;
-        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(image.width * scale);
-        canvas.height = Math.round(image.height * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.78));
+        // 逐步压小，直到照片能装进 JsonBin 免费版的容量
+        const attempts = [[720, 0.6], [640, 0.5], [560, 0.45], [480, 0.4], [400, 0.34], [340, 0.3]];
+        let dataUrl = "";
+        for (const [maxSide, quality] of attempts) {
+          const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+          if (dataUrl.length <= PHOTO_BUDGET) break;
+        }
+        resolve(dataUrl);
       };
       image.src = reader.result;
     };
@@ -419,9 +454,15 @@ async function saveRecordFromForm() {
 async function deleteSelectedRecord() {
   const id = $("#recordId").value;
   if (!id) return;
-  const ok = window.confirm("确定删除这条记录吗？配置了 JsonBin 时会同步删除到云端。");
+  const ok = window.confirm("确定删除这条记录吗？会同步删除到其他设备。");
   if (!ok) return;
-  state.records = state.records.filter((item) => item.id !== id);
+  // 用删除标记代替直接移除，否则另一台设备合并时会把它加回来
+  const record = state.records.find((item) => item.id === id);
+  if (record) {
+    record.deleted = true;
+    record.photo = "";
+    record.updatedAt = new Date().toISOString();
+  }
   if (state.selectedId === id) state.selectedId = null;
   els.recordDialog.close();
   await saveAndSync(hasCloudConfig() ? "已删除，正在同步" : "已删除");
@@ -470,7 +511,7 @@ async function createCloudBin() {
       "X-Bin-Private": "true",
       "X-Bin-Name": "tarot-journal"
     },
-    body: JSON.stringify(appData())
+    body: cloudPayload().json
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || "创建失败");
@@ -480,76 +521,95 @@ async function createCloudBin() {
   showToast("已创建云端库，之后会自动同步");
 }
 
-async function saveCloud() {
-  saveConfig();
-  if (!state.config.apiKey || !state.config.binId) {
-    showToast("先填写 API Key 和 Bin ID");
-    return;
+function cloudPayload() {
+  const records = state.records.map((record) => ({ ...record }));
+  const build = () => JSON.stringify({
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    records
+  });
+  let json = build();
+  let trimmed = 0;
+  // 容量不够时从最旧的记录开始去掉照片（照片仍保留在本机），保证文字记录一定同步成功
+  const oldestFirst = [...records].sort((a, b) => sortRecords(b, a));
+  for (const record of oldestFirst) {
+    if (json.length <= BIN_SIZE_LIMIT) break;
+    if (!record.photo) continue;
+    record.photo = "";
+    record.photoOmitted = true;
+    trimmed += 1;
+    json = build();
   }
+  return { json, trimmed, fits: json.length <= BIN_SIZE_LIMIT };
+}
 
+async function fetchCloud() {
+  const response = await fetch(`${JSONBIN_URL}/${state.config.binId}/latest`, {
+    headers: { "X-Master-Key": state.config.apiKey }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "下载失败");
+  return mergeRecords(normalizeCloudData(data.record), []);
+}
+
+async function pushCloud() {
+  const { json, trimmed, fits } = cloudPayload();
+  if (!fits) throw new Error("云端容量已满（免费版上限 100KB），删除一些旧记录或照片后再试");
   const response = await fetch(`${JSONBIN_URL}/${state.config.binId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       "X-Master-Key": state.config.apiKey
     },
-    body: JSON.stringify(appData())
+    body: json
   });
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || "上传失败");
-  showToast("已同步到 JsonBin");
+  return trimmed;
 }
 
-async function loadCloud() {
-  saveConfig();
-  if (!state.config.apiKey || !state.config.binId) {
-    showToast("先填写 API Key 和 Bin ID");
-    return;
-  }
-
-  const response = await fetch(`${JSONBIN_URL}/${state.config.binId}/latest`, {
-    headers: { "X-Master-Key": state.config.apiKey }
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || "下载失败");
-  const cloudRecords = normalizeCloudData(data.record);
-  state.records = mergeRecords(state.records, cloudRecords);
-  saveLocal(`已从云端同步 ${cloudRecords.length} 条记录`);
-}
-
-async function autoSyncToCloud() {
+async function syncNow(reason = "auto") {
   if (!hasCloudConfig() || state.syncing) return;
   state.syncing = true;
   updateSyncState();
   try {
-    await saveCloud();
-  } catch (error) {
-    showToast(`自动同步失败：${error.message || "请稍后手动上传"}`);
-  } finally {
-    state.syncing = false;
-    updateSyncState();
-  }
-}
-
-async function autoLoadFromCloud() {
-  if (!hasCloudConfig() || state.syncing) return;
-  state.syncing = true;
-  updateSyncState();
-  try {
-    const before = JSON.stringify(state.records);
-    await loadCloud();
-    const after = JSON.stringify(state.records);
-    if (before !== after) {
-      state.syncing = false;
-      await autoSyncToCloud();
-      state.syncing = true;
+    // 先拉取云端并合并，再上传合并结果，两台设备都不会覆盖对方
+    const cloudRecords = await fetchCloud();
+    const merged = mergeRecords(state.records, cloudRecords);
+    state.records = merged;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
+    let trimmed = 0;
+    if (JSON.stringify(merged) !== JSON.stringify(cloudRecords)) {
+      trimmed = await pushCloud();
     }
+    state.lastSyncAt = new Date();
+    if (reason === "manual") showToast("已完成同步");
+    if (trimmed) showToast(`云端容量有限，${trimmed} 张旧照片只保留在本机`);
   } catch (error) {
-    showToast(`自动下载失败：${error.message || "请稍后手动下载"}`);
+    showToast(`同步失败：${error.message || "请稍后再试"}`);
   } finally {
     state.syncing = false;
-    updateSyncState();
+    render();
   }
+}
+
+function scheduleSync(delay = 600) {
+  if (!hasCloudConfig()) return;
+  window.clearTimeout(scheduleSync.timer);
+  scheduleSync.timer = window.setTimeout(() => {
+    if (state.syncing) {
+      scheduleSync(800);
+      return;
+    }
+    syncNow("save");
+  }, delay);
+}
+
+function syncOnReturn() {
+  if (!hasCloudConfig() || state.syncing) return;
+  const last = state.lastSyncAt ? state.lastSyncAt.getTime() : 0;
+  if (Date.now() - last < 20000) return;
+  syncNow("auto");
 }
 
 function exportData() {
@@ -636,14 +696,14 @@ function bindEvents() {
   [els.searchInput, els.topicFilter, els.reviewFilter].forEach((input) => input.addEventListener("input", render));
   [els.apiKeyInput, els.binIdInput].forEach((input) => input.addEventListener("change", () => {
     saveConfig();
-    if (hasCloudConfig()) withCloud(autoLoadFromCloud);
+    if (hasCloudConfig()) syncNow("manual");
   }));
 
   $("#createBinBtn").addEventListener("click", () => withCloud(createCloudBin));
-  $("#saveCloudBtn").addEventListener("click", () => withCloud(saveCloud));
-  $("#loadCloudBtn").addEventListener("click", () => withCloud(loadCloud));
-  $("#quickSaveCloudBtn").addEventListener("click", () => withCloud(saveCloud));
-  $("#quickLoadCloudBtn").addEventListener("click", () => withCloud(loadCloud));
+  $("#saveCloudBtn").addEventListener("click", () => syncNow("manual"));
+  $("#loadCloudBtn").addEventListener("click", () => syncNow("manual"));
+  $("#quickSaveCloudBtn").addEventListener("click", () => syncNow("manual"));
+  $("#quickLoadCloudBtn").addEventListener("click", () => syncNow("manual"));
   $("#editCloudConfigBtn").addEventListener("click", () => {
     els.syncSetup.hidden = false;
     els.syncSummary.hidden = true;
@@ -670,7 +730,8 @@ async function withCloud(fn) {
 function seedIfEmpty() {
   if (state.records.length) return;
   state.records = [{
-    id: uid(),
+    // 固定 id，避免每台新设备都生成一条重复的示例记录
+    id: "sample-welcome-record",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     date: today(),
@@ -699,4 +760,11 @@ loadLocal();
 seedIfEmpty();
 bindEvents();
 render();
-autoLoadFromCloud();
+syncNow("auto");
+
+// 切回这个页面 / 重新联网时自动再同步一次，手机长期开着页面也能拿到电脑上的新记录
+window.addEventListener("focus", syncOnReturn);
+window.addEventListener("online", syncOnReturn);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncOnReturn();
+});

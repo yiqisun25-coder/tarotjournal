@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>我的塔罗记录</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260712">
   </head>
   <body>
     <div class="app-shell">
@@ -23,7 +23,7 @@
             <span id="syncState">仅本地</span>
           </div>
           <div id="syncSummary" class="sync-summary" hidden>
-            <p>JsonBin 已连接，保存后自动同步</p>
+            <p>JsonBin 已连接，打开页面和保存时都会自动双向同步</p>
             <div class="button-grid">
               <button id="quickSaveCloudBtn" class="secondary" type="button">上传</button>
               <button id="quickLoadCloudBtn" class="secondary" type="button">下载</button>
@@ -269,6 +269,6 @@
     </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>
-    <script src="app.js"></script>
+    <script src="app.js?v=20260712"></script>
   </body>
 </html>
