@@ -16,7 +16,7 @@ function majorUnit(title, card, anchor, upright, reversed, match, thesis, scene,
       { label: "阴影面", text: shadow },
       { label: "组合练习", text: combo }
     ],
-    task: "填第 7 格：把今天这张牌和昨天那张连成一个 30 字的故事。"
+    task: "模仿上面「组合练习」那一行，用自己的话把今天这张牌和昨天学的那张连成一个 30 字的小故事（手册里管这叫「填第 7 格」——每张大牌有 7 个格子，组合练习是第 7 个）。78 天后你要的不是 78 个词条，是 77 条连线。"
   };
 }
 

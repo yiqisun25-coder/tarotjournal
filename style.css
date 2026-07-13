@@ -397,6 +397,10 @@ textarea:focus {
   border-radius: 8px;
   display: grid;
   gap: 8px;
+  /* 覆盖全局 button 的 justify-content: center，否则内容短时整块居中 */
+  justify-content: stretch;
+  justify-items: start;
+  align-items: start;
 }
 
 .record-card.active {
