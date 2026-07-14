@@ -393,9 +393,18 @@ function renderDetail() {
     return;
   }
 
-  const cardsHtml = (record.cards || []).map((card) => `
+  const cardsHtml = (record.cards || []).map((card) => {
+    const imagePath = cardImagePath(card.name);
+    const reversed = card.orientation === "逆位";
+    const visual = imagePath
+      ? `<div class="detail-card-visual${reversed ? " reversed" : ""}">
+          <img src="${imagePath}" alt="${escapeHtml(card.name)}牌面">
+          ${reversed ? `<span class="card-face-reversed">逆</span>` : ""}
+        </div>`
+      : cardFaceHtml(card);
+    return `
     <div class="tarot-card">
-      ${cardFaceHtml(card)}
+      ${visual}
       <div class="tarot-card-body">
         <span class="tag">${escapeHtml(card.position || "位置")}</span>
         <h4>${escapeHtml(card.name || "未填牌名")} ${card.orientation ? `· ${escapeHtml(card.orientation)}` : ""}</h4>
@@ -403,8 +412,8 @@ function renderDetail() {
         <p>${escapeHtml(card.personalMeaning || "")}</p>
         ${card.keywords ? `<p><strong>关键词：</strong>${escapeHtml(card.keywords)}</p>` : ""}
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 
   const reviewsHtml = (record.reviews || []).map((review) => `
     <div class="review-item">

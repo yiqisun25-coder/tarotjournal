@@ -490,10 +490,29 @@ textarea:focus {
   white-space: pre-wrap;
 }
 
+/* 一张牌一行：真牌图在左，解读在右，长文字有足够行宽 */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.detail-card-visual {
+  position: relative;
+  flex: 0 0 132px;
+  align-self: flex-start;
+}
+
+.detail-card-visual img {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(50, 38, 27, 0.16);
+  display: block;
+}
+
+.detail-card-visual.reversed img {
+  transform: rotate(180deg);
 }
 
 .tarot-card {
@@ -519,7 +538,8 @@ textarea:focus {
   color: var(--muted);
   font-size: 14px;
   margin-bottom: 6px;
-  line-height: 1.6;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 /* 花色配色 */
@@ -872,6 +892,10 @@ form {
   .daily-card-img,
   .daily-card-img--sm {
     width: 118px;
+  }
+
+  .detail-card-visual {
+    flex-basis: 104px;
   }
 
   .daily-card-img--sm {
